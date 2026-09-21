@@ -15,6 +15,7 @@ import { EmojiPanel, StickerPanel } from "./emoji-panel";
 import { StickerSearchSuggest } from "./sticker-search-suggest";
 import { StateValuesPanel } from "./state-values-panel";
 import { generateChatCompletion, generateOfflineChatCompletion, flattenCompletionResult, ChatEngineError } from "@/lib/chat-engine";
+import { generateChatReplyChoices } from "@/lib/chat-reply-choices";
 import { formatOfflineTurnXml as formatOfflineTurnXmlShared, buildOfflinePromptHistory as buildOfflinePromptHistoryShared } from "@/lib/offline-prompt-builder";
 import { getStatusRegionConfig, isCustomStatusRegionActive } from "@/lib/chat-status-region";
 import { CustomStatusFrame } from "@/components/chat/custom-status-frame";
@@ -52,7 +53,7 @@ import { useKeyboardDismissAutoSend } from "@/components/chat/use-keyboard-dismi
 import { cancelBailoutKey } from "@/lib/push-bailout-client";
 import { PENDING_REPLY_PREFIX } from "@/lib/friend-request-engine";
 import type { UserIdentity } from "@/components/settings/user-identity";
-import { AlertCircle, Blocks, Check, Trash2, User, ChevronLeft, ChevronRight, Clapperboard, Clock, Gift, Languages, Loader2, MoreHorizontal, X } from "lucide-react";
+import { AlertCircle, Blocks, Check, Trash2, User, ChevronLeft, ChevronRight, Clapperboard, Clock, Gift, Languages, Loader2, MessageSquare, MoreHorizontal, X } from "lucide-react";
 import { setDebugChatState } from "@/lib/debug-store";
 import { SessionCustomCSS } from "@/components/ui/session-custom-css";
 import { setChatActive } from "@/lib/music-action-queue";
@@ -605,6 +606,7 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     isSpectator: boolean;
     muteUntilMs: number;
     isGenerating: boolean;
+    replyContextKey: string;
     theaterMode: boolean;
     enterToSendEnabled: boolean;
     quotingMessage: ChatMessage | null;
@@ -627,6 +629,7 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     onSendText: (text: string, options?: { autoReply?: boolean }) => boolean;
     onStopGeneration: () => void;
     onTriggerAIResponse: () => void;
+	onGenerateReplyChoices: (signal: AbortSignal) => Promise<string[]>;
 	onSendSticker: (name: string, url?: string) => void;
 }>(function ChatTextInputBar({
     characterName,
@@ -636,6 +639,7 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     isSpectator,
     muteUntilMs,
     isGenerating,
+    replyContextKey,
     theaterMode,
     enterToSendEnabled,
     quotingMessage,
@@ -658,10 +662,46 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     onSendText,
     onStopGeneration,
     onTriggerAIResponse,
+    onGenerateReplyChoices,
     onSendSticker,
 }, ref) {
     const [inputText, setInputText] = useState("");
+    const [replyChoices, setReplyChoices] = useState<string[]>([]);
+    const [replyChoiceError, setReplyChoiceError] = useState("");
+    const [replyChoicesLoading, setReplyChoicesLoading] = useState(false);
+    const choiceRequest = useRef<AbortController | null>(null);
+    const currentContextKey = useRef(replyContextKey);
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+    useEffect(() => {
+        currentContextKey.current = replyContextKey;
+        choiceRequest.current?.abort();
+        choiceRequest.current = null;
+        setReplyChoices([]);
+        setReplyChoiceError("");
+        setReplyChoicesLoading(false);
+    }, [replyContextKey]);
+    useEffect(() => () => choiceRequest.current?.abort(), []);
+
+    const generateChoices = async () => {
+        if (inputLocked || isGenerating || replyChoicesLoading || inputText.trim()) return;
+        const controller = new AbortController();
+        choiceRequest.current = controller;
+        const contextKey = currentContextKey.current;
+        setReplyChoices([]);
+        setReplyChoiceError("");
+        setReplyChoicesLoading(true);
+        try {
+            const choices = await onGenerateReplyChoices(controller.signal);
+            if (!controller.signal.aborted && currentContextKey.current === contextKey) setReplyChoices(choices);
+        } catch (error) {
+            if (!controller.signal.aborted) setReplyChoiceError(error instanceof Error ? error.message : "生成回复选项失败");
+        } finally {
+            if (choiceRequest.current === controller) {
+                choiceRequest.current = null;
+                setReplyChoicesLoading(false);
+            }
+        }
+    };
     // 表情包搜索联想：ESC/失焦置 true 隐藏，输入变化重新开启
     const [suggestClosed, setSuggestClosed] = useState(false);
     // 围观群/被禁言：输入与富媒体入口全部锁定，只留线下切换和生成按钮
@@ -679,6 +719,11 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
     };
 
     const appendText = useCallback((text: string, options?: { focus?: boolean }) => {
+        choiceRequest.current?.abort();
+        choiceRequest.current = null;
+        setReplyChoicesLoading(false);
+        setReplyChoices([]);
+        setReplyChoiceError("");
         setInputText(prev => prev + text);
         requestAnimationFrame(() => {
             const ta = textareaRef.current;
@@ -778,11 +823,47 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
                     onClose={() => setSuggestClosed(true)}
                 />
             )}
+            {(replyChoicesLoading || replyChoices.length > 0 || replyChoiceError) && (
+                <div className="chat-reply-choices" aria-label="四选一回复">
+                    <div className="chat-reply-choices-header">
+                        <span>{replyChoicesLoading ? "正在生成四条回复…" : "选一条放进输入框"}</span>
+                        <button type="button" onClick={() => {
+                            choiceRequest.current?.abort();
+                            choiceRequest.current = null;
+                            setReplyChoicesLoading(false);
+                            setReplyChoices([]);
+                            setReplyChoiceError("");
+                        }} aria-label="关闭回复选项"><X size={16} /></button>
+                    </div>
+                    {replyChoiceError && <p role="alert" className="chat-reply-choices-error">{replyChoiceError}</p>}
+                    {replyChoices.map((choice, index) => (
+                        <button key={`${index}-${choice}`} type="button" className="chat-reply-choice" onClick={() => {
+                            setInputText(choice);
+                            setReplyChoices([]);
+                            setReplyChoiceError("");
+                            onClosePanels();
+                            requestAnimationFrame(() => {
+                                const textarea = textareaRef.current;
+                                if (!textarea) return;
+                                textarea.style.height = "auto";
+                                textarea.style.height = Math.min(textarea.scrollHeight, 120) + "px";
+                                textarea.focus();
+                            });
+                        }}><span>{index + 1}</span>{choice}</button>
+                    ))}
+                    {!replyChoicesLoading && <button type="button" className="chat-reply-choices-refresh" onClick={() => void generateChoices()}>换一组</button>}
+                </div>
+            )}
             <textarea
                 ref={textareaRef}
                 rows={1}
                 value={inputText}
                 onChange={e => {
+                    choiceRequest.current?.abort();
+                    choiceRequest.current = null;
+                    setReplyChoicesLoading(false);
+                    setReplyChoices([]);
+                    setReplyChoiceError("");
                     setInputText(e.target.value);
                     setSuggestClosed(false);
                     e.target.style.height = "auto";
@@ -836,6 +917,9 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
                 </button>
                 <button onClick={onTogglePlusMenu} disabled={inputLocked} className="ui-bare-btn text-[var(--c-text)]" style={inputLocked ? { opacity: 0.35 } : undefined}>
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
+                </button>
+                <button type="button" onClick={() => void generateChoices()} disabled={inputLocked || isGenerating || replyChoicesLoading || Boolean(inputText.trim())} className="ui-bare-btn text-[var(--c-text)]" aria-label="生成四条回复选项" title={inputText.trim() ? "先清空输入框再生成回复选项" : "生成四条回复选项"}>
+                    {replyChoicesLoading ? <Loader2 size={22} className="animate-spin" /> : <MessageSquare size={22} />}
                 </button>
                 <button
                     onClick={handleSubmit}
@@ -6231,7 +6315,8 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
 	                isGroup={!!session.isGroup}
 	                isSpectator={!!session.isGroup && !!session.isSpectator}
 	                muteUntilMs={session.isGroup && session.groupMutes?.[GROUP_SELF_KEY] ? new Date(session.groupMutes[GROUP_SELF_KEY]).getTime() : 0}
-	                isGenerating={isGenerating}
+				isGenerating={isGenerating}
+				replyContextKey={messages.at(-1)?.id || ""}
 	                theaterMode={theaterMode}
 	                enterToSendEnabled={enterToSendEnabled}
 	                quotingMessage={quotingMessage}
@@ -6254,6 +6339,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                 onSendText={handleSendText}
                 onStopGeneration={clearStuckGeneration}
                 onTriggerAIResponse={triggerAIResponse}
+                onGenerateReplyChoices={(signal) => generateChatReplyChoices(session, loadChatMessages(session.id), signal)}
                 onSendSticker={(name, url) => { setShowStickerPanel(false); sendRichMessage("sticker", { label: name, stickerUrl: url }); }}
             />
             ))}

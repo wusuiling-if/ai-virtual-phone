@@ -77,6 +77,39 @@ function setPromptTags(tags: string[]): Partial<Prompt> {
     };
 }
 
+function includePresetCustomTagGroups(groups: TagGroupProfile[], presets: PresetConfig[]): TagGroupProfile[] {
+    const result = groups.map(group => ({ ...group, minors: [...group.minors] }));
+    for (const preset of presets) for (const prompt of preset.prompts ?? []) {
+        const tags = getPromptTags(prompt);
+        if (!tags.length || findTagGroupForTags(result, tags)) continue;
+        const id = `preset_custom_${encodeURIComponent(JSON.stringify(tags))}`;
+        const root = result.find(group => group.tags[0] === tags[0]);
+        const minor = { id, label: tags.length > 1 ? tags.slice(1).map(resolveContentTagLabel).join(" · ") : "通用", tags };
+        if (root) root.minors.push(minor);
+        else result.push({ id: `preset_custom_group_${encodeURIComponent(tags[0])}`, label: resolveContentTagLabel(tags[0]), tags: [tags[0]], minors: [minor] });
+    }
+    return result;
+}
+
+function CustomPromptTagsInput({ tags, onSave }: { tags: string[]; onSave: (tags: string[]) => void }) {
+    const [draft, setDraft] = useState(tags.join(", "));
+    useEffect(() => { setDraft(tags.join(", ")); }, [tags.join("\u0000")]);
+    const save = () => {
+        const next = [...new Set(draft.split(/[,，\n]+/).map(tag => tag.trim()).filter(Boolean))];
+        if (!areTagsEqual(next, tags)) onSave(next);
+        setDraft(next.join(", "));
+    };
+    return <input
+        className="ui-input w-full ts-13"
+        aria-label="自定义适用标签"
+        placeholder="自定义标签，逗号分隔；留空为通用"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
+    />;
+}
+
 // ── Marker 名称自动识别（手动编辑与桌宠填表共用） ──
 // marker 条目靠 identifier 注入内容，条目名称命中下表时自动补齐 identifier + marker。
 const MARKER_NAMES: Record<string, string> = {
@@ -342,12 +375,12 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
         };
     }, []);
 
-    const tagGroups = useMemo(() => [
+    const tagGroups = useMemo(() => includePresetCustomTagGroups([
         ...CONTENT_SCOPE_TAG_GROUPS,
         ...buildCustomAppTagGroups(customApps, {
             prompts: presets.flatMap(preset => preset.prompts ?? []),
         }),
-    ], [customApps, presets]);
+    ], presets), [customApps, presets]);
 
     const tagProfiles = useMemo(() => flattenTagGroups(tagGroups), [tagGroups]);
     const activePreset = useMemo(
@@ -1894,6 +1927,11 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                                                 ))}
                                                                             </select>
                                                                         </div>
+                                                                        <CustomPromptTagsInput
+                                                                            tags={promptTags}
+                                                                            onSave={tags => updatePrompt(preset, prompt.identifier, current => ({ ...current, ...setPromptTags(tags) }))}
+                                                                        />
+                                                                        <span className="menu-desc ts-11">多个标签需同时命中使用场景；留空对所有场景生效。</span>
                                                                     </div>
                                                                 </div>
                                                             </div>

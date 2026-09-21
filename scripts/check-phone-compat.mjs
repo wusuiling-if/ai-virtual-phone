@@ -522,6 +522,11 @@ await test('高级隐藏规则支持 flags、跨行和非法表达式校验', ()
     assert.equal(applyDisplayRegex('a<hide>一\n二</hide>b', [filterGroup('/<hide>.*?<\\/hide>/gs', 'regex')], 2, ctx), 'ab');
     assert.throws(() => filterGroup('/[bad/g', 'regex'), /无效/);
     assert.throws(() => filterGroup('/foo/gg', 'regex'), /无效/);
+    assert.throws(() => filterGroup('/(a+)+$/', 'regex'), /卡住/);
+    assert.throws(() => filterGroup('/(a|b)\\1/', 'regex'), /卡住/);
+    const legacy = { ...filterGroup('safe'), rules: [{ ...filterGroup('safe').rules[0], findRegex: '/(a+)+$/' }] };
+    assert.equal(applyDisplayRegex('a'.repeat(31) + '!', [legacy], 2, ctx), 'a'.repeat(31) + '!');
+    assert.equal(applyDisplayRegex('x\\1y', [filterGroup('\\1')], 2, ctx), 'xy');
 });
 await test('快捷隐藏自动追加绑定，保留已有覆盖、API 和继承关系', () => {
     const original = {

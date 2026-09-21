@@ -1,7 +1,15 @@
 import type { BindingConfig, BindingSlot, RegexRule } from "./settings-types";
 
+export function isPotentiallyUnsafeDisplayPattern(source: string): boolean {
+    if (/\([^)]*[+*][^)]*\)[+*{]/.test(source)) return true;
+    for (const match of source.matchAll(/\\+[1-9]/g)) {
+        if (match[0].length % 2 === 0) return true; // odd number of slashes before the digit
+    }
+    return false;
+}
+
 /** Build display-only rules; literal mode never interprets a user's words as regex. */
-export function createDisplayFilterRules(input: string, mode: "words" | "regex", id: string): RegexRule[] {
+function compileDisplayFilterPattern(input: string, mode: "words" | "regex"): RegExp {
     let pattern: RegExp;
     if (mode === "words") {
         const words = [...new Set(input.split(/\r?\n/).map(word => word.trim()).filter(Boolean))];
@@ -12,13 +20,28 @@ export function createDisplayFilterRules(input: string, mode: "words" | "regex",
     } else {
         const source = input.trim();
         if (!source) throw new Error("请先填写正则表达式。");
+        if (source.length > 300) throw new Error("正则表达式过长，请控制在 300 字符以内。");
         const wrapped = source.match(/^\/([\s\S]*)\/([a-z]*)$/i);
+        const body = wrapped ? wrapped[1] : source;
+        // Nested quantifiers and backreferences are the common route to catastrophic backtracking.
+        if (isPotentiallyUnsafeDisplayPattern(body)) {
+            throw new Error("此表达式可能让聊天页面卡住，请避免嵌套重复或反向引用。");
+        }
         try {
-            pattern = wrapped ? new RegExp(wrapped[1], wrapped[2]) : new RegExp(source, "g");
+            pattern = wrapped ? new RegExp(body, wrapped[2]) : new RegExp(body, "g");
         } catch {
             throw new Error("正则表达式无效，请检查括号、转义和 flags。");
         }
     }
+    return pattern;
+}
+
+export function previewDisplayFilter(input: string, mode: "words" | "regex", sample: string): string {
+    return sample.replace(compileDisplayFilterPattern(input, mode), "");
+}
+
+export function createDisplayFilterRules(input: string, mode: "words" | "regex", id: string): RegexRule[] {
+    const pattern = compileDisplayFilterPattern(input, mode);
     const scopes = [
         { name: "单聊", tags: ["chat", "text"] },
         { name: "群聊", tags: ["group_chat", "text"] },

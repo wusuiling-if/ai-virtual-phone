@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { BottomSheet } from "@/components/ui/modal";
-import { applyDisplayRegex } from "@/lib/llm-prompt-assembler";
 import { createDisplayFilterRules } from "@/lib/regex-display-filter";
 import type { RegexRule } from "@/lib/settings-types";
 
@@ -14,14 +13,40 @@ export function DisplayFilterCreator({ onClose, onCreate }: {
     const [input, setInput] = useState("");
     const [name, setName] = useState("AI 正文隐藏");
     const [sample, setSample] = useState("");
-    const result = useMemo(() => {
-        try {
-            const rules = createDisplayFilterRules(input, mode, "display-filter");
-            const group = { id: "preview", name: "预览", createdAt: 0, updatedAt: 0, rules };
-            return { rules, output: applyDisplayRegex(sample, [group], 2, { activeTags: ["chat", "text"] }), error: "" };
-        } catch (error) {
-            return { rules: [], output: sample, error: error instanceof Error ? error.message : "请检查输入。" };
-        }
+    const [result, setResult] = useState({ output: "", error: "", pending: false });
+    useEffect(() => {
+        if (!input.trim()) { setResult({ output: sample, error: "", pending: false }); return; }
+        setResult(current => ({ ...current, pending: true, error: "" }));
+        let worker: Worker | undefined;
+        let deadline: ReturnType<typeof setTimeout> | undefined;
+        const debounce = setTimeout(() => {
+            if (typeof Worker === "undefined") {
+                setResult({ output: sample, error: "当前浏览器无法安全预览正则。", pending: false });
+                return;
+            }
+            try {
+                worker = new Worker(new URL("./display-filter-preview.worker.ts", import.meta.url));
+            } catch {
+                setResult({ output: sample, error: "无法启动安全预览，请检查浏览器设置。", pending: false });
+                return;
+            }
+            worker.onmessage = (event: MessageEvent<{ output: string; error: string }>) => {
+                if (deadline) clearTimeout(deadline);
+                setResult({ ...event.data, pending: false });
+                worker?.terminate();
+            };
+            worker.onerror = () => {
+                if (deadline) clearTimeout(deadline);
+                setResult({ output: sample, error: "预览运行失败，请检查表达式。", pending: false });
+                worker?.terminate();
+            };
+            worker.postMessage({ input, mode, sample: sample.slice(0, 10_000) });
+            deadline = setTimeout(() => {
+                worker?.terminate();
+                setResult({ output: sample, error: "表达式执行过慢，已停止预览；请简化后再保存。", pending: false });
+            }, 2000);
+        }, 150);
+        return () => { clearTimeout(debounce); if (deadline) clearTimeout(deadline); worker?.terminate(); };
     }, [input, mode, sample]);
 
     return (
@@ -56,8 +81,8 @@ export function DisplayFilterCreator({ onClose, onCreate }: {
                         <div className="ui-code-block whitespace-pre-wrap" aria-label="隐藏后的预览">{result.output || "（正文已全部隐藏）"}</div>
                     </div>
                 )}
-                <button type="button" className="ui-btn ui-btn-primary w-full" disabled={!!result.error}
-                    onClick={() => { if (!result.error) onCreate(name.trim() || "AI 正文隐藏", result.rules); }}>
+                <button type="button" className="ui-btn ui-btn-primary w-full" disabled={!input.trim() || result.pending || !!result.error}
+                    onClick={() => { if (!result.error && !result.pending) onCreate(name.trim() || "AI 正文隐藏", createDisplayFilterRules(input, mode, "display-filter")); }}>
                     保存并对所有角色启用
                 </button>
             </div>

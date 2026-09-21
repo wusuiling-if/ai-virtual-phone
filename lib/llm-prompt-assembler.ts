@@ -10,6 +10,7 @@ import type { RecentBlock, UnifiedRecentItem } from "./short-term-assembler";
 import { readDwellingLayoutCache } from "./dwelling-storage";
 import { formatDwellingContext } from "./dwelling-engine";
 import { matchesActiveTags } from "./content-tag-utils";
+import { isPotentiallyUnsafeDisplayPattern } from "./regex-display-filter";
 import { formatXiaohongshuShareForPrompt } from "./chat-share";
 import { stripStateAndInnerForPrompt } from "./prompt-sanitizer";
 import { formatPromptTimestamp, getPromptTimestampOptionsForTimeContext, resolvePromptTimeAware, type PromptTimestampOptions } from "./prompt-time";
@@ -1415,6 +1416,11 @@ function filterString(raw: string, trimStrings: string[] | undefined, macroEngin
  */
 function runRegexRule(rule: import("./settings-types").RegexRule, text: string, macroEngine?: MacroEngine): string {
     if (!rule.findRegex || !text) return text;
+
+    // Older shortcut rules may have been saved before the editor rejected patterns
+    // that can hang the message renderer. Leave those rules inactive on display.
+    if (rule.scriptName?.startsWith("隐藏 AI 正文（") &&
+        isPotentiallyUnsafeDisplayPattern(rule.findRegex)) return text;
 
     // --- optionally substitute macros inside the findRegex pattern ---
     let regexString = rule.findRegex;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { checkPhoneUpdate, normalizeUpdateRepository, PHONE_BUILD_REPOSITORY, PHONE_BUILD_SHA, readDeployedVersion, syncPhoneFork, UPDATE_BRANCH, UPDATE_REPOSITORY, type UpdateCheck } from "@/lib/phone-update";
+import { checkPhoneUpdate, normalizeUpdateRepository, PHONE_BUILD_REPOSITORY, PHONE_BUILD_SHA, PHONE_DEPLOYMENT_MODE, readDeployedVersion, syncPhoneFork, UPDATE_BRANCH, UPDATE_REPOSITORY, type UpdateCheck } from "@/lib/phone-update";
 
 const PREFS = "phone-update-repository-v1";
 const TOKEN = "phone-update-session-token-v1";
@@ -81,6 +81,7 @@ export function SoftwareUpdate() {
         finally { setBusy(false); }
     };
     const update = async () => {
+        if (PHONE_DEPLOYMENT_MODE === "manual") { setError("本站由命令行手动部署。同步 GitHub 不会触发 Vercel 发布，请按下方说明手动部署新版。"); return; }
         if (!token.trim() || !repository.trim()) { setShowConfig(true); setError("请先完成下面的首次更新配置，再点击一键更新"); return; }
         if (!check?.latestSha) return;
         setBusy(true); setError(""); setMessage("");
@@ -123,13 +124,15 @@ export function SoftwareUpdate() {
             <p className="menu-desc">当前版本：{short(PHONE_BUILD_SHA)}{check?.latestSha ? ` · 最新版本：${short(check.latestSha)}` : ""}</p>
             <p className="menu-desc">{UPDATE_REPOSITORY} · {UPDATE_BRANCH}</p>
             {check && <p role="status">{stateText[check.state]}</p>}
+            {PHONE_DEPLOYMENT_MODE === "manual" && <p className="menu-desc">本站使用命令行手动部署。请在部署电脑拉取兼容分支，再运行 <code>npm run deploy:vercel</code> 发布；GitHub 一键同步不会让本站上线新版。</p>}
+            {PHONE_DEPLOYMENT_MODE === "unknown" && check?.state === "available" && <p className="menu-desc">未识别到本站的 Git 自动部署信息。使用一键更新前，请确认 Vercel / Netlify 已连接此仓库并将兼容分支设为生产分支；命令行部署请在部署电脑手动发布。</p>}
             {check?.summary && <p className="menu-desc break-words">最近改动：{check.summary}</p>}
             {message && <p role="status" className="menu-desc">{message}</p>}
             {ready && autoReload && <div><p className="menu-desc">5 秒后自动载入新版。</p><button type="button" className="ui-btn ui-btn-outline" onClick={() => setAutoReload(false)}>稍后载入</button></div>}
             {error && <p role="alert" className="menu-desc" style={{ color: "var(--c-danger, #c62828)" }}>{error}</p>}
             <button type="button" className="ui-btn ui-btn-outline" disabled={busy || Boolean(pending)} onClick={() => void runCheck()}>{busy ? "处理中…" : "检查更新"}</button>
             {ready ? <button type="button" className="ui-btn ui-btn-primary" disabled={busy} onClick={() => void reload()}>载入新版</button>
-                : check?.state === "available" && <button type="button" className="ui-btn ui-btn-primary" disabled={busy || Boolean(pending)} onClick={() => void update()}>{pending ? "等待新版上线…" : "一键更新"}</button>}
+                : check?.state === "available" && PHONE_DEPLOYMENT_MODE !== "manual" && <button type="button" className="ui-btn ui-btn-primary" disabled={busy || Boolean(pending)} onClick={() => void update()}>{pending ? "等待新版上线…" : "一键更新"}</button>}
             {pending && <button type="button" className="ui-btn ui-btn-outline" onClick={() => {
                 setAutoReload(false); setPending(null); try { sessionStorage.removeItem(PENDING); } catch { /* optional */ }
                 setMessage("已停止等待，已同步的代码不会撤销。可以稍后再次检查更新。");

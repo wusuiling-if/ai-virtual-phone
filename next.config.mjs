@@ -32,11 +32,14 @@ if (!phoneBuildRepository && process.env.REPOSITORY_URL) {
   const match = process.env.REPOSITORY_URL.match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/);
   phoneBuildRepository = match?.[1] || "";
 }
+const phoneDeploymentMode = process.env.PHONE_DEPLOYMENT_MODE === "manual"
+  ? "manual"
+  : process.env.PHONE_DEPLOYMENT_MODE === "git" || phoneBuildRepository ? "git" : "unknown";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typedRoutes: true,
-  env: { NEXT_PUBLIC_PHONE_BUILD_SHA: /^[a-f0-9]{40}$/i.test(phoneBuildSha) ? phoneBuildSha : "", NEXT_PUBLIC_PHONE_BUILD_REPOSITORY: phoneBuildRepository },
+  env: { NEXT_PUBLIC_PHONE_BUILD_SHA: /^[a-f0-9]{40}$/i.test(phoneBuildSha) ? phoneBuildSha : "", NEXT_PUBLIC_PHONE_BUILD_REPOSITORY: phoneBuildRepository, NEXT_PUBLIC_PHONE_DEPLOYMENT_MODE: phoneDeploymentMode },
   outputFileTracingRoot: projectRoot,
   distDir: resolveDistDir(),
   eslint: {

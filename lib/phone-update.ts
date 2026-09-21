@@ -3,6 +3,7 @@ export const UPDATE_REPOSITORY = "wusuiling-if/ai-virtual-phone";
 export const UPDATE_BRANCH = "codex/phone-compatibility";
 export const PHONE_BUILD_SHA = process.env.NEXT_PUBLIC_PHONE_BUILD_SHA || "";
 export const PHONE_BUILD_REPOSITORY = process.env.NEXT_PUBLIC_PHONE_BUILD_REPOSITORY || "";
+export const PHONE_DEPLOYMENT_MODE = process.env.NEXT_PUBLIC_PHONE_DEPLOYMENT_MODE || "unknown";
 export type UpdateCheck = {
     state: "current" | "available" | "refresh" | "custom" | "unknown";
     deployedSha: string;

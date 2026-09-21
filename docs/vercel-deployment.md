@@ -19,10 +19,10 @@
 ```sh
 npx vercel login
 npx vercel link --project ai-virtual-phone --scope wusuilings-projects
-npx vercel deploy --prod --scope wusuilings-projects
+npm run deploy:vercel -- --scope wusuilings-projects
 ```
 
-当前通过 CLI 上传本地工作区发布，未绑定 GitHub 自动部署。已有的 Netlify 部署未删除。
+当前通过 CLI 上传本地工作区发布，未绑定 GitHub 自动部署。站内同步 GitHub 不会触发本站发布；上面的命令会记录构建提交号供版本检查使用。已有的 Netlify 部署未删除。
 
 ## 访问和数据
 

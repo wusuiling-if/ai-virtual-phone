@@ -4,7 +4,7 @@
 >
 > 使用说明与已知限制见 [兼容版说明](docs/phone-compatibility.md)。Vertex 与 MiniMax 尚未使用真实服务账号进行端到端验证。
 >
-> **部署本版**：在 Vercel 或 Netlify 导入本仓库，部署分支选择 `codex/phone-compatibility`，构建命令 `npm run build`，并在构建前设置 `NEXT_PUBLIC_SELF_HOSTED_MODE=true`。需要支持 Next.js 服务端的部署环境，不能仅部署到 GitHub Pages。每位用户在应用设置中配置自己的模型和语音凭据，不要把密钥或服务账号 JSON 提交到仓库。
+> **部署本版**：在 Vercel 或 Netlify 导入本仓库，生产分支选择 `main`（已有兼容分支部署可继续使用 `codex/phone-compatibility`），构建命令 `npm run build`，并在构建前设置 `NEXT_PUBLIC_SELF_HOSTED_MODE=true`。需要支持 Next.js 服务端的部署环境，不能仅部署到 GitHub Pages。每位用户在应用设置中配置自己的模型和语音凭据，不要把密钥或服务账号 JSON 提交到仓库。
 
 一个基于 Next.js 的 AI 虚拟互动手机：在浏览器中模拟一部完整的手机，支持与你创建的 AI 角色进行仿真聊天、朋友圈互动与剧情创作。
 
@@ -24,7 +24,7 @@
 
 ## 更新兼容版
 
-在 **设置 → 软件更新** 检查版本。首次配置自己的 GitHub Fork 和限定仓库的更新令牌后，可点击“一键更新”，同步兼容分支并等待已连接的部署平台发布，完成后自动载入。命令行部署的 Vercel 站点需在部署电脑运行 `npm run deploy:vercel`，同步 GitHub 本身不会发布站点。已有自定义代码时会停止自动更新，不强制覆盖。旧部署需先手动更新一次才能获得此入口。详见 [更新教程](docs/software-update.md)。
+在 **设置 → 软件更新** 检查版本。首次配置自己的 GitHub Fork 和限定仓库的更新令牌后，可点击“一键更新”，将更新源同步到当前部署分支并等待已连接的部署平台发布，完成后自动载入。支持 `main` 和 `codex/phone-compatibility` 两种部署分支。命令行部署的 Vercel 站点需在部署电脑运行 `npm run deploy:vercel`，同步 GitHub 本身不会发布站点。已有自定义代码时会停止自动更新，不强制覆盖。旧部署需先手动更新一次才能获得此入口。详见 [更新教程](docs/software-update.md)。
 
 ## 运行要求
 
@@ -34,7 +34,7 @@
 ## 快速开始（本地运行）
 
 ```bash
-git clone -b codex/phone-compatibility https://github.com/wusuiling-if/ai-virtual-phone.git
+git clone -b main https://github.com/wusuiling-if/ai-virtual-phone.git
 cd ai-virtual-phone
 npm install
 cp .env.example .env.local
@@ -63,7 +63,7 @@ NEXT_PUBLIC_SELF_HOSTED_MODE=true
 
 两个平台都可以直接导入本仓库部署：
 
-1. 新建站点 / 项目，关联你 fork 或 clone 的仓库，选择 `codex/phone-compatibility` 分支；
+1. 新建站点 / 项目，关联你 fork 或 clone 的仓库，生产分支选择 `main`；已有兼容分支部署也可以继续使用 `codex/phone-compatibility`；
 2. 构建设置保持默认即可（Netlify 会自动读取仓库里的 `netlify.toml`；Vercel 自动识别 Next.js）；
 3. **在平台后台添加环境变量**（平台不会读取仓库里的 `.env.example`）：
 

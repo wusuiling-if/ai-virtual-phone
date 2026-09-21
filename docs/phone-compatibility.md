@@ -1,6 +1,6 @@
 # 小手机兼容改进版
 
-基于上游 `fc65539c8494b9328ea76c1e557ec12b168e24bc`，分支 `codex/phone-compatibility`。
+基于上游 `fc65539c8494b9328ea76c1e557ec12b168e24bc`，发布在 `main` 与 `codex/phone-compatibility`。
 
 本版保持小手机自己的预设与聊天逻辑，不导入酒馆预设，也不运行酒馆插件脚本。
 

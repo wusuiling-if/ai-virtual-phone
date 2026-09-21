@@ -2,16 +2,16 @@
 
 入口：**设置 → 软件更新**。
 
-本功能从 `wusuiling-if/ai-virtual-phone` 的 `codex/phone-compatibility` 分支检查更新。不是从原作者仓库拉取代码。2026-09-16 添加。
+本功能从 `wusuiling-if/ai-virtual-phone` 的 `codex/phone-compatibility` 分支检查更新，并把新提交快进同步到本站实际部署的 `main` 或 `codex/phone-compatibility` 分支。不是从原作者仓库拉取代码。2026-09-16 添加。
 
-**Vercel 命令行部署的站点**不会在推送 GitHub 后自动重新发布。部署电脑先拉取兼容分支并提交本地修改，再运行 `npm run deploy:vercel`；此命令要求工作区干净，并将当前 Git 提交号写入构建，供站内版本检查使用。此前用普通 `vercel deploy` 且上传时排除了 `.git` 的版本可能显示“未记录构建版本”。如需站内一键更新，请把自己的 Fork 连接到 Vercel 的 Git 自动部署，并把生产分支设为兼容分支。
+**Vercel 命令行部署的站点**不会在推送 GitHub 后自动重新发布。部署电脑先拉取 `main`（或兼容分支）并提交本地修改，再运行 `npm run deploy:vercel`；此命令要求工作区干净，并将当前 Git 提交号写入构建，供站内版本检查使用。此前用普通 `vercel deploy` 且上传时排除了 `.git` 的版本可能显示“未记录构建版本”。如需站内一键更新，请把自己的 Fork 连接到 Vercel 的 Git 自动部署，并把生产分支设为 `main` 或兼容分支。
 
 ## 第一次启用
 
 旧网站没有这个入口，需要先手动同步并部署包含本功能的版本一次。以后可从小手机里操作。
 
 1. 在 GitHub Fork 本兼容版仓库。旧的原作者 Fork 不属于这个新的仓库网络，不能使用本功能。
-2. 将自己的 Fork 连接到 Vercel / Netlify，生产分支选 `codex/phone-compatibility`，开启 Git 自动部署。仅下载 ZIP 或自己搭建服务器、没有部署自动化的用户仍需自行部署。
+2. 将自己的 Fork 连接到 Vercel / Netlify，生产分支选 `main`（已有兼容分支部署可继续使用 `codex/phone-compatibility`），开启 Git 自动部署。仅下载 ZIP 或自己搭建服务器、没有部署自动化的用户仍需自行部署。
 3. 在“软件更新 → 首次配置 / 更新授权”填写自己的 `用户名/仓库名`。
 4. 在 GitHub 创建 Fine-grained personal access token，仅选择这个仓库，授予 **Contents: Read and write**。若更新包含 `.github/workflows` 的变更，还需要 **Workflows: Read and write**。组织仓库可能需要管理员批准，受保护分支需按其规则更新。
 5. 把令牌填入软件更新页。默认只保留在组件内存；勾选“在当前标签页会话中记住授权”才保存到 sessionStorage。关闭标签页、清除会话或令牌到期后需要重新输入。不保存到 IndexedDB、localStorage 或小手机备份；网络请求直接发往 `https://api.github.com`，本站服务器不接收此令牌。

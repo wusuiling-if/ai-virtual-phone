@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { checkPhoneUpdate, normalizeUpdateRepository, PHONE_BUILD_REPOSITORY, PHONE_BUILD_SHA, PHONE_DEPLOYMENT_MODE, readDeployedVersion, syncPhoneFork, UPDATE_BRANCH, UPDATE_REPOSITORY, type UpdateCheck } from "@/lib/phone-update";
+import { checkPhoneUpdate, normalizeUpdateRepository, PHONE_BUILD_BRANCH, PHONE_BUILD_REPOSITORY, PHONE_BUILD_SHA, PHONE_DEPLOYMENT_MODE, readDeployedVersion, syncPhoneFork, UPDATE_BRANCH, UPDATE_REPOSITORY, type UpdateCheck } from "@/lib/phone-update";
 
 const PREFS = "phone-update-repository-v1";
 const TOKEN = "phone-update-session-token-v1";
@@ -87,7 +87,7 @@ export function SoftwareUpdate() {
         setBusy(true); setError(""); setMessage("");
         try {
             const target = normalizeUpdateRepository(repository);
-            const result = await syncPhoneFork(target, token, check.latestSha, lifetime.current?.signal);
+            const result = await syncPhoneFork(target, token, check.latestSha, lifetime.current?.signal, fetch, PHONE_BUILD_BRANCH || UPDATE_BRANCH);
             try { localStorage.setItem(PREFS, target); } catch { /* optional */ }
             const job = { sha: result.sha, started: Date.now() };
             try { sessionStorage.setItem(PENDING, JSON.stringify(job)); } catch { /* optional */ }
@@ -122,10 +122,10 @@ export function SoftwareUpdate() {
         <div className="ui-list-card flex-col items-stretch gap-3">
             <h2 className="menu-label">小手机软件更新</h2>
             <p className="menu-desc">当前版本：{short(PHONE_BUILD_SHA)}{check?.latestSha ? ` · 最新版本：${short(check.latestSha)}` : ""}</p>
-            <p className="menu-desc">{UPDATE_REPOSITORY} · {UPDATE_BRANCH}</p>
+            <p className="menu-desc">更新来源：{UPDATE_REPOSITORY} · {UPDATE_BRANCH}{PHONE_BUILD_BRANCH && PHONE_BUILD_BRANCH !== UPDATE_BRANCH ? ` · 部署分支：${PHONE_BUILD_BRANCH}` : ""}</p>
             {check && <p role="status">{stateText[check.state]}</p>}
-            {PHONE_DEPLOYMENT_MODE === "manual" && <p className="menu-desc">本站使用命令行手动部署。请在部署电脑拉取兼容分支，再运行 <code>npm run deploy:vercel</code> 发布；GitHub 一键同步不会让本站上线新版。</p>}
-            {PHONE_DEPLOYMENT_MODE === "unknown" && check?.state === "available" && <p className="menu-desc">未识别到本站的 Git 自动部署信息。使用一键更新前，请确认 Vercel / Netlify 已连接此仓库并将兼容分支设为生产分支；命令行部署请在部署电脑手动发布。</p>}
+            {PHONE_DEPLOYMENT_MODE === "manual" && <p className="menu-desc">本站使用命令行手动部署。请在部署电脑拉取 main 或兼容分支，再运行 <code>npm run deploy:vercel</code> 发布；GitHub 一键同步不会让本站上线新版。</p>}
+            {PHONE_DEPLOYMENT_MODE === "unknown" && check?.state === "available" && <p className="menu-desc">未识别到本站的 Git 自动部署信息。使用一键更新前，请确认 Vercel / Netlify 已连接此仓库，并将 main 或兼容分支设为生产分支；命令行部署请在部署电脑手动发布。</p>}
             {check?.summary && <p className="menu-desc break-words">最近改动：{check.summary}</p>}
             {message && <p role="status" className="menu-desc">{message}</p>}
             {ready && autoReload && <div><p className="menu-desc">5 秒后自动载入新版。</p><button type="button" className="ui-btn ui-btn-outline" onClick={() => setAutoReload(false)}>稍后载入</button></div>}
@@ -142,7 +142,7 @@ export function SoftwareUpdate() {
         <details open={showConfig} onToggle={e => setShowConfig(e.currentTarget.open)} className="ui-list-card flex-col items-stretch gap-3">
             <summary className="menu-label cursor-pointer">首次配置 / 更新授权</summary>
             <div className="flex flex-col gap-3 mt-3">
-                <p className="menu-desc">用于自己部署的小手机：仓库必须是本兼容版的 Fork，且部署平台已连接下面的兼容分支并开启 Git 自动部署。首次配置后即可在这里同步并等待新版上线。</p>
+                <p className="menu-desc">用于自己部署的小手机：仓库必须是本兼容版的 Fork，且部署平台已连接 main 或兼容分支并开启 Git 自动部署。首次配置后即可在这里同步并等待新版上线。</p>
                 <label className="menu-desc">你的 GitHub 仓库
                     <input className="ui-input w-full" aria-label="更新目标仓库" value={repository} disabled={busy || Boolean(pending)} placeholder="你的用户名/ai-virtual-phone" onChange={e => {
                         setRepository(e.target.value); try { localStorage.setItem(PREFS, e.target.value); } catch { /* optional */ }

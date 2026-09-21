@@ -296,6 +296,27 @@ await test('软件更新只向 GitHub 发送授权并验证 Fork，快进同步�
     assert.deepEqual(await syncPhoneFork('test-user/phone','fake-update-token',latestSha,undefined,fetcher),{sha:latestSha,changed:false});
     assert.equal(writes,1);
 });
+await test('从 main 部署时更新 main，不误写兼容分支', async () => {
+    let current = oldSha, writes = 0;
+    const fetcher = async (url, init) => {
+        const path = new URL(url).pathname;
+        if (path.includes('/commits/')) return Response.json({ sha: latestSha });
+        if (path.endsWith(`/repos/${UPDATE_REPOSITORY}`)) return Response.json({ full_name: UPDATE_REPOSITORY, permissions: { push: true } });
+        if (path.includes('/compare/')) return Response.json({ status: 'ahead' });
+        if (path.includes('/git/ref/')) { assert.ok(path.endsWith('/heads/main')); return Response.json({ object: { sha: current } }); }
+        if (init.method === 'PATCH') {
+            assert.ok(path.endsWith('/heads/main'));
+            assert.equal(JSON.parse(init.body).force, false);
+            writes++; current = latestSha;
+            return Response.json({ object: { sha: current } });
+        }
+        throw new Error(`unexpected path: ${path}`);
+    };
+    assert.deepEqual(await syncPhoneFork(UPDATE_REPOSITORY, 'fake', latestSha, undefined, fetcher, 'main'), { sha: latestSha, changed: true });
+    assert.equal(writes, 1);
+    await assert.rejects(syncPhoneFork(UPDATE_REPOSITORY, 'fake', latestSha, undefined, fetcher, 'other'), /不支持一键更新/);
+    assert.equal(writes, 1);
+});
 await test('软件更新拒绝错误来源、无权限、分叉、上游竞态和无效仓库，不执行写入', async () => {
     assert.throws(()=>normalizeUpdateRepository('https://evil.test/a/b'),/仓库/);
     for (const scenario of ['wrong-source','no-permission','diverged','changed-source','unauthorized']) {

@@ -35,11 +35,12 @@ if (!phoneBuildRepository && process.env.REPOSITORY_URL) {
 const phoneDeploymentMode = process.env.PHONE_DEPLOYMENT_MODE === "manual"
   ? "manual"
   : process.env.PHONE_DEPLOYMENT_MODE === "git" || phoneBuildRepository ? "git" : "unknown";
+const phoneBuildBranch = process.env.PHONE_BUILD_BRANCH || process.env.VERCEL_GIT_COMMIT_REF || process.env.BRANCH || "";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typedRoutes: true,
-  env: { NEXT_PUBLIC_PHONE_BUILD_SHA: /^[a-f0-9]{40}$/i.test(phoneBuildSha) ? phoneBuildSha : "", NEXT_PUBLIC_PHONE_BUILD_REPOSITORY: phoneBuildRepository, NEXT_PUBLIC_PHONE_DEPLOYMENT_MODE: phoneDeploymentMode },
+  env: { NEXT_PUBLIC_PHONE_BUILD_SHA: /^[a-f0-9]{40}$/i.test(phoneBuildSha) ? phoneBuildSha : "", NEXT_PUBLIC_PHONE_BUILD_REPOSITORY: phoneBuildRepository, NEXT_PUBLIC_PHONE_DEPLOYMENT_MODE: phoneDeploymentMode, NEXT_PUBLIC_PHONE_BUILD_BRANCH: phoneBuildBranch },
   outputFileTracingRoot: projectRoot,
   distDir: resolveDistDir(),
   eslint: {

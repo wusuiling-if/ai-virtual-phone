@@ -1,6 +1,7 @@
 /** Public update source; credentials are used only by the browser against api.github.com. */
 export const UPDATE_REPOSITORY = "wusuiling-if/ai-virtual-phone";
 export const UPDATE_BRANCH = "codex/phone-compatibility";
+export const PHONE_BUILD_BRANCH = process.env.NEXT_PUBLIC_PHONE_BUILD_BRANCH || "";
 export const PHONE_BUILD_SHA = process.env.NEXT_PUBLIC_PHONE_BUILD_SHA || "";
 export const PHONE_BUILD_REPOSITORY = process.env.NEXT_PUBLIC_PHONE_BUILD_REPOSITORY || "";
 export const PHONE_DEPLOYMENT_MODE = process.env.NEXT_PUBLIC_PHONE_DEPLOYMENT_MODE || "unknown";
@@ -56,8 +57,9 @@ export async function checkPhoneUpdate(token = "", clientSha = PHONE_BUILD_SHA, 
     }
 }
 
-export async function syncPhoneFork(repositoryInput: string, tokenInput: string, expectedSha: string, signal?: AbortSignal, fetcher = fetch): Promise<{ sha: string; changed: boolean }> {
+export async function syncPhoneFork(repositoryInput: string, tokenInput: string, expectedSha: string, signal?: AbortSignal, fetcher = fetch, targetBranch = UPDATE_BRANCH): Promise<{ sha: string; changed: boolean }> {
     const repository = normalizeUpdateRepository(repositoryInput);
+    if (targetBranch !== UPDATE_BRANCH && targetBranch !== "main") throw new Error("当前部署分支不支持一键更新，请在 GitHub 手动合并");
     const token = tokenInput.trim();
     if (!token) throw new Error("首次更新请在下方配置 GitHub 更新授权");
     if (!validSha(expectedSha)) throw new Error("请先检查更新");
@@ -69,12 +71,12 @@ export async function syncPhoneFork(repositoryInput: string, tokenInput: string,
     const isSource = repository.toLowerCase() === UPDATE_REPOSITORY.toLowerCase();
     const source = String(metadata.source?.full_name || metadata.parent?.full_name || "").toLowerCase();
     if (!isSource && (!metadata.fork || source !== UPDATE_REPOSITORY.toLowerCase())) throw new Error("这个仓库不是兼容版的 Fork。请使用从 wusuiling-if/ai-virtual-phone 创建的 Fork；原作者仓库的旧 Fork 不适用");
-    const refPath = `/repos/${repository}/git/refs/heads/${encodeURIComponent(UPDATE_BRANCH)}`;
+    const refPath = `/repos/${repository}/git/refs/heads/${encodeURIComponent(targetBranch)}`;
     const current = await github(refPath.replace("/git/refs/", "/git/ref/"), token, options, fetcher);
     const currentSha = current.object?.sha;
     if (!validSha(currentSha)) throw new Error("目标分支信息无效");
     if (currentSha === expectedSha) return { sha: expectedSha, changed: false };
-    if (isSource) throw new Error("维护者仓库已发生变化，请重新检查更新");
+    if (isSource && targetBranch === UPDATE_BRANCH) throw new Error("维护者仓库已发生变化，请重新检查更新");
     const comparison = await github(`/repos/${repository}/compare/${currentSha}...${expectedSha}`, token, options, fetcher);
     if (comparison.status !== "ahead") throw new Error("你的分支包含自定义修改，已停止自动更新。请在 GitHub 手动合并，原代码保持不变");
     // GitHub enforces fast-forward at write time too, protecting against concurrent edits.
